@@ -25,6 +25,7 @@ func main() {
 	// add a new one.
 	registry := commands.NewRegistry(
 		commands.NewPing(),
+		commands.NewGrapje(),
 	)
 
 	b, err := bot.New(cfg, registry, log)
