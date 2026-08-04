@@ -24,10 +24,12 @@ type Config struct {
 	// CommandTimeout bounds the total handling of one slash command, including
 	// retries. Keep it under 15 minutes: that is Discord's followup window.
 	CommandTimeout time.Duration
+	RCONAddress string
+	RCONPassword string
+}
 
-	// GitHubToken is optional. Without it the GitHub API allows 60 requests per
-	// hour per IP; with it, 5000.
-	GitHubToken string
+func (c *Config) RCONEnabled() bool {
+	return c.RCONAddress != "" && c.RCONPassword != ""
 }
 
 // Load reads configuration from the environment and validates it.
@@ -36,7 +38,8 @@ func Load() (*Config, error) {
 		DiscordToken:   strings.TrimSpace(os.Getenv("DISCORD_TOKEN")),
 		AppID:          strings.TrimSpace(os.Getenv("DISCORD_APP_ID")),
 		GuildID:        strings.TrimSpace(os.Getenv("DISCORD_GUILD_ID")),
-		GitHubToken:    strings.TrimSpace(os.Getenv("GITHUB_TOKEN")),
+		RCONAddress:    strings.TrimSpace(os.Getenv("RCON_ADDRESS")),
+		RCONPassword:   strings.TrimSpace(os.Getenv("RCON_PASSWORD")),
 		HTTPTimeout:    durationEnv("HTTP_TIMEOUT", 10*time.Second),
 		CommandTimeout: durationEnv("COMMAND_TIMEOUT", 30*time.Second),
 	}

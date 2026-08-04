@@ -9,6 +9,7 @@ import (
 	"github.com/FDionSimon/discord-bot/internal/bot"
 	"github.com/FDionSimon/discord-bot/internal/commands"
 	"github.com/FDionSimon/discord-bot/internal/config"
+	"github.com/FDionSimon/discord-bot/internal/minecraft"
 )
 
 func main() {
@@ -21,12 +22,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Register every command here. This is the only place that changes when you
-	// add a new one.
-	registry := commands.NewRegistry(
+	// Add New commands 
+	cmds := []commands.Command{
 		commands.NewPing(),
-		commands.NewCommand(),
-	)
+	}
+
+	if cfg.RCONEnabled() {
+		mc := minecraft.New(cfg.RCONAddress, cfg.RCONPassword, cfg.HTTPTimeout)
+		cmds = append(cmds, commands.NewMinecraft(mc),)
+	} else {
+		log.Info("rcon not configured, skipping minecraft commands")
+	}
+
+	registry := commands.NewRegistry(cmds...)
 
 	b, err := bot.New(cfg, registry, log)
 	if err != nil {
