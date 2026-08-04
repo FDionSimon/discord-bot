@@ -15,7 +15,6 @@ import (
 // is not in this map — no input sanitising needed.
 var safeActions = map[string]string{
 	"players":    "list",
-	"time":       "time query daytime",
 	"difficulty": "difficulty",
 	"whitelist":  "whitelist list",
 }
@@ -43,8 +42,7 @@ func (m *Minecraft) Definition() *discordgo.ApplicationCommand {
 				Required:    true,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{Name: "Who is online", Value: "players"},
-					{Name: "In-game time", Value: "time"},
-					{Name: "Difficulty", Value: "difficulty"},
+					{Name: "Difficulty", Value: "difficulty"}, 
 					{Name: "Whitelist", Value: "whitelist"},
 				},
 			},
@@ -83,9 +81,7 @@ func (m *Minecraft) Handle(ctx context.Context, s *discordgo.Session, i *discord
 	}
 
 	return ReplyEmbed(s, i, &discordgo.MessageEmbed{
-		Title:       "Minecraft Server",
-		Description: out,
+		Title:       out,
 		Color:       ColorSuccess,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "via RCON: " + command},
 	})
 }
