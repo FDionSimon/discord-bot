@@ -27,6 +27,7 @@ go.work.sum
 bin/
 *.exe
 discord-bot
+bot
 
 # Editor/IDE
 .idea/
