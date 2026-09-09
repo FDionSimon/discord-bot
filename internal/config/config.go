@@ -26,6 +26,7 @@ type Config struct {
 	CommandTimeout time.Duration
 	RCONAddress string
 	RCONPassword string
+	valheimURL string
 }
 
 func (c *Config) RCONEnabled() bool {
@@ -40,6 +41,7 @@ func Load() (*Config, error) {
 		GuildID:        strings.TrimSpace(os.Getenv("DISCORD_GUILD_ID")),
 		RCONAddress:    strings.TrimSpace(os.Getenv("RCON_ADDRESS")),
 		RCONPassword:   strings.TrimSpace(os.Getenv("RCON_PASSWORD")),
+		valheimURL: 	strings.TrimSpace(os.Getenv("VALHEIM_URL")),
 		HTTPTimeout:    durationEnv("HTTP_TIMEOUT", 10*time.Second),
 		CommandTimeout: durationEnv("COMMAND_TIMEOUT", 30*time.Second),
 	}

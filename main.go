@@ -10,6 +10,7 @@ import (
 	"github.com/FDionSimon/discord-bot/internal/commands"
 	"github.com/FDionSimon/discord-bot/internal/config"
 	"github.com/FDionSimon/discord-bot/internal/minecraft"
+	"github.com/FDionSimon/discord-bot/internal/api-call"
 )
 
 func main() {
