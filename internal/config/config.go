@@ -24,9 +24,10 @@ type Config struct {
 	// CommandTimeout bounds the total handling of one slash command, including
 	// retries. Keep it under 15 minutes: that is Discord's followup window.
 	CommandTimeout time.Duration
-	RCONAddress string
-	RCONPassword string
-	valheimURL string
+	RCONAddress    string
+	RCONPassword   string
+	ValheimURL     string
+	ValheimToken   string
 }
 
 func (c *Config) RCONEnabled() bool {
@@ -41,7 +42,8 @@ func Load() (*Config, error) {
 		GuildID:        strings.TrimSpace(os.Getenv("DISCORD_GUILD_ID")),
 		RCONAddress:    strings.TrimSpace(os.Getenv("RCON_ADDRESS")),
 		RCONPassword:   strings.TrimSpace(os.Getenv("RCON_PASSWORD")),
-		valheimURL: 	strings.TrimSpace(os.Getenv("VALHEIM_URL")),
+		ValheimURL:     strings.TrimSpace(os.Getenv("VALHEIM_URL")),
+		ValheimToken:   strings.TrimSpace(os.Getenv("VALHEIM_TOKEN")),
 		HTTPTimeout:    durationEnv("HTTP_TIMEOUT", 10*time.Second),
 		CommandTimeout: durationEnv("COMMAND_TIMEOUT", 30*time.Second),
 	}

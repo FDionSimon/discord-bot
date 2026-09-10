@@ -3,13 +3,14 @@ package commands
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 
-	"github.com/FDionSimon/discord-bot/internal/api-call"
+	"github.com/FDionSimon/discord-bot/internal/apiclient"
 )
-
 
 type valheimAction struct {
 	title string
@@ -20,7 +21,7 @@ var valheimActions = map[string]valheimAction{
 	"server":  {title: "Server Info", path: "v1/status"},
 	"players": {title: "Online Players", path: "v1/players"},
 	"world":   {title: "World Info", path: "v1/world"},
-	"bosses":   {title: "Boss Info", path: "v1/bosses"},
+	"bosses":  {title: "Boss Info", path: "v1/bosses"},
 }
 
 type Valheim struct {
@@ -47,7 +48,7 @@ func (m *Valheim) Definition() *discordgo.ApplicationCommand {
 				Required:    true,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{Name: "List Players", Value: "players"},
-					{Name: "Boss Info", Value: "bosses"}, 
+					{Name: "Boss Info", Value: "bosses"},
 					{Name: "Server Info", Value: "server"},
 					{Name: "World Info", Value: "world"},
 				},
@@ -59,16 +60,16 @@ func (m *Valheim) Definition() *discordgo.ApplicationCommand {
 func (m *Valheim) Handle(ctx context.Context, s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	opts := OptionMap(i.ApplicationCommandData().Options)
 	action := StringOption(opts, "action", "")
- 
+
 	spec, ok := valheimActions[action]
 	if !ok {
 		// Only reachable if the choices and the map fall out of sync.
 		return ReplyError(s, i, "Unknown action.")
 	}
- 
+
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
- 
+
 	// Decoding into `any` rather than a struct keeps this endpoint-agnostic:
 	// the renderer below walks whatever shape comes back.
 	data, err := apiclient.GetJSON[any](ctx, m.client, spec.path, nil)
@@ -78,20 +79,20 @@ func (m *Valheim) Handle(ctx context.Context, s *discordgo.Session, i *discordgo
 		}
 		return fmt.Errorf("call %q: %w", spec.path, err)
 	}
- 
+
 	return ReplyEmbed(s, i, renderJSON(spec.title, data))
 }
 
 func renderJSON(title string, data any) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{Title: title, Color: ColorSuccess}
- 
+
 	switch v := data.(type) {
 	case map[string]any:
 		embed.Fields = objectFields(v)
 		if len(embed.Fields) == 0 {
 			embed.Description = "_(empty response)_"
 		}
- 
+
 	case []any:
 		if len(v) == 0 {
 			embed.Description = "_(nothing to show)_"
@@ -106,11 +107,11 @@ func renderJSON(title string, data any) *discordgo.MessageEmbed {
 			lines = append(lines, fmt.Sprintf("%d. %s", idx+1, formatValue(item)))
 		}
 		embed.Description = truncateField(strings.Join(lines, "\n"), 4000)
- 
+
 	default:
 		embed.Description = formatValue(v)
 	}
- 
+
 	return embed
 }
 
@@ -120,7 +121,7 @@ func objectFields(obj map[string]any) []*discordgo.MessageEmbedField {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
- 
+
 	fields := make([]*discordgo.MessageEmbedField, 0, len(keys))
 	for _, k := range keys {
 		if len(fields) >= 25 { // Discord's hard cap on embed fields
@@ -138,7 +139,7 @@ func objectFields(obj map[string]any) []*discordgo.MessageEmbedField {
 	}
 	return fields
 }
- 
+
 func formatValue(v any) string {
 	switch t := v.(type) {
 	case nil:
@@ -173,7 +174,7 @@ func formatValue(v any) string {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
- 
+
 		parts := make([]string, 0, len(keys))
 		for _, k := range keys {
 			parts = append(parts, fmt.Sprintf("%s=%s", k, formatValue(t[k])))
@@ -183,7 +184,7 @@ func formatValue(v any) string {
 		return fmt.Sprintf("%v", t)
 	}
 }
- 
+
 func prettifyKey(k string) string {
 	k = strings.ReplaceAll(k, "_", " ")
 	k = strings.ReplaceAll(k, "-", " ")
@@ -192,7 +193,7 @@ func prettifyKey(k string) string {
 	}
 	return strings.ToUpper(k[:1]) + k[1:]
 }
- 
+
 func truncateField(s string, max int) string {
 	if len(s) <= max {
 		return s

@@ -10,7 +10,6 @@ import (
 	"github.com/FDionSimon/discord-bot/internal/commands"
 	"github.com/FDionSimon/discord-bot/internal/config"
 	"github.com/FDionSimon/discord-bot/internal/minecraft"
-	"github.com/FDionSimon/discord-bot/internal/api-call"
 )
 
 func main() {
@@ -23,14 +22,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Add New commands 
+	// Add New commands
 	cmds := []commands.Command{
 		commands.NewPing(),
+		commands.NewValheim(cfg.ValheimURL, cfg.ValheimToken, cfg.CommandTimeout),
 	}
 
 	if cfg.RCONEnabled() {
 		mc := minecraft.New(cfg.RCONAddress, cfg.RCONPassword, cfg.HTTPTimeout)
-		cmds = append(cmds, commands.NewMinecraft(mc),)
+		cmds = append(cmds, commands.NewMinecraft(mc))
 	} else {
 		log.Info("rcon not configured, skipping minecraft commands")
 	}
