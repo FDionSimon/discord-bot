@@ -24,14 +24,14 @@ type Config struct {
 	// CommandTimeout bounds the total handling of one slash command, including
 	// retries. Keep it under 15 minutes: that is Discord's followup window.
 	CommandTimeout time.Duration
-	RCONAddress    string
-	RCONPassword   string
-	ValheimURL     string
-	ValheimToken   string
+	RCONAddressMC  string
+	RCONPasswordMC string
+	RCONAddressVH  string
+	RCONPasswordVH string
 }
 
 func (c *Config) RCONEnabled() bool {
-	return c.RCONAddress != "" && c.RCONPassword != ""
+	return c.RCONAddressMC != "" && c.RCONPasswordMC != "" || c.RCONAddressVH != "" && c.RCONPasswordVH != ""
 }
 
 // Load reads configuration from the environment and validates it.
@@ -40,10 +40,10 @@ func Load() (*Config, error) {
 		DiscordToken:   strings.TrimSpace(os.Getenv("DISCORD_TOKEN")),
 		AppID:          strings.TrimSpace(os.Getenv("DISCORD_APP_ID")),
 		GuildID:        strings.TrimSpace(os.Getenv("DISCORD_GUILD_ID")),
-		RCONAddress:    strings.TrimSpace(os.Getenv("RCON_ADDRESS")),
-		RCONPassword:   strings.TrimSpace(os.Getenv("RCON_PASSWORD")),
-		ValheimURL:     strings.TrimSpace(os.Getenv("VALHEIM_URL")),
-		ValheimToken:   strings.TrimSpace(os.Getenv("VALHEIM_TOKEN")),
+		RCONAddressMC:  strings.TrimSpace(os.Getenv("RCON_ADDRESS_MC")),
+		RCONPasswordMC: strings.TrimSpace(os.Getenv("RCON_PASSWORD_MC")),
+		RCONAddressVH:  strings.TrimSpace(os.Getenv("RCON_ADDRESS_VH")),
+		RCONPasswordVH: strings.TrimSpace(os.Getenv("RCON_PASSWORD_VH")),
 		HTTPTimeout:    durationEnv("HTTP_TIMEOUT", 10*time.Second),
 		CommandTimeout: durationEnv("COMMAND_TIMEOUT", 30*time.Second),
 	}

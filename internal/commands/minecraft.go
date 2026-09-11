@@ -7,13 +7,10 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	"github.com/FDionSimon/discord-bot/internal/minecraft"
+	"github.com/FDionSimon/discord-bot/internal/rcon"
 )
 
-// safeActions maps a user-facing choice to the RCON command it runs.
-// Discord validates choices server-side, so /mc can never send anything that
-// is not in this map — no input sanitising needed.
-var safeActions = map[string]string{
+var minecraftActions = map[string]string{
 	"players":    "list",
 	"difficulty": "difficulty",
 	"whitelist":  "whitelist list",
@@ -21,11 +18,11 @@ var safeActions = map[string]string{
 
 // Minecraft exposes read-only server queries to everyone in the guild.
 type Minecraft struct {
-	client *minecraft.Client
+	client *rcon.Client
 }
 
 // NewMinecraft builds the /mc command.
-func NewMinecraft(client *minecraft.Client) *Minecraft {
+func NewMinecraft(client *rcon.Client) *Minecraft {
 	return &Minecraft{client: client}
 }
 
@@ -33,7 +30,7 @@ func NewMinecraft(client *minecraft.Client) *Minecraft {
 func (m *Minecraft) Definition() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
 		Name:        "mc",
-		Description: "Query the Minecraft server",
+		Description: "Query Shon's Minecraft server",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -42,7 +39,7 @@ func (m *Minecraft) Definition() *discordgo.ApplicationCommand {
 				Required:    true,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{Name: "Who is online", Value: "players"},
-					{Name: "Difficulty", Value: "difficulty"}, 
+					{Name: "Difficulty", Value: "difficulty"},
 					{Name: "Whitelist", Value: "whitelist"},
 				},
 			},
@@ -59,7 +56,7 @@ func (m *Minecraft) Handle(ctx context.Context, s *discordgo.Session, i *discord
 	opts := OptionMap(i.ApplicationCommandData().Options)
 	action := StringOption(opts, "action", "")
 
-	command, ok := safeActions[action]
+	command, ok := minecraftActions[action]
 	if !ok {
 		// Only reachable if the choices and the map fall out of sync.
 		return ReplyError(s, i, "Unknown action.")
@@ -81,7 +78,7 @@ func (m *Minecraft) Handle(ctx context.Context, s *discordgo.Session, i *discord
 	}
 
 	return ReplyEmbed(s, i, &discordgo.MessageEmbed{
-		Title:       out,
-		Color:       ColorSuccess,
+		Title: out,
+		Color: ColorSuccess,
 	})
 }
