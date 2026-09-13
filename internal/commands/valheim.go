@@ -11,11 +11,11 @@ import (
 )
 
 var valhiemActions = map[string]string{
-	"players":      "player list",
-	"eventsList":   "event list",
-	"currentEvent": "current event",
-	"serverStats":  "server stats",
-	"globalKeys":   "boss info",
+	"players":      "players",
+	"eventsList":   "eventsList",
+	"currentEvent": "currentEvent",
+	"serverStats":  "serverStats",
+	"globalKeys":   "globalKeys",
 }
 
 type Valheim struct {
