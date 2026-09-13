@@ -12,10 +12,9 @@ import (
 
 var valhiemActions = map[string]string{
 	"players":      "players",
-	"eventsList":   "eventsList",
 	"currentEvent": "currentEvent",
 	"serverStats":  "serverStats",
-	"globalKeys":   "globalKeys",
+	"stopEvent":    "stopEvent",
 }
 
 type Valheim struct {
@@ -40,10 +39,9 @@ func (m *Valheim) Definition() *discordgo.ApplicationCommand {
 				Required:    true,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{Name: "List players", Value: "players"},
-					{Name: "List events", Value: "eventsList"},
 					{Name: "Current event", Value: "currentEvent"},
 					{Name: "Server stats", Value: "serverStats"},
-					{Name: "Boss info", Value: "globalKeys"},
+					{Name: "Stop event", Value: "stopEvent"},
 				},
 			},
 		},
