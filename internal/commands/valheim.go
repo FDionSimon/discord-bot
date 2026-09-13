@@ -11,9 +11,12 @@ import (
 )
 
 var valhiemActions = map[string]string{
-	"players":    "list",
-	"difficulty": "difficulty",
-	"whitelist":  "whitelist list",
+	"players":      "player list",
+	"findPlayer":   "player info",
+	"eventsList":   "event list",
+	"currentEvent": "current event",
+	"serverStats":  "server stats",
+	"globalKeys":   "boss info",
 }
 
 type Valheim struct {
@@ -37,9 +40,9 @@ func (m *Valheim) Definition() *discordgo.ApplicationCommand {
 				Description: "What to ask the server",
 				Required:    true,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
-					{Name: "Who is online", Value: "players"},
-					{Name: "Difficulty", Value: "difficulty"},
-					{Name: "Whitelist", Value: "whitelist"},
+					{Name: "List players", Value: "player list"},
+					{Name: "Locate player", Value: "player info"},
+					{Name: "List events", Value: "event list"},
 				},
 			},
 		},

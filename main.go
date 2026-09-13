@@ -27,14 +27,18 @@ func main() {
 		commands.NewPing(),
 	}
 
-	if cfg.RCONEnabled() {
+	if cfg.MCEnabled() {
 		mc := rcon.New(cfg.RCONAddressMC, cfg.RCONPasswordMC, cfg.HTTPTimeout)
 		cmds = append(cmds, commands.NewMinecraft(mc))
+	} else {
+		log.Info("MC rcon not configured, skipping minecraft commands")
+	}
 
+	if cfg.VHEnabled() {
 		vh := rcon.New(cfg.RCONAddressVH, cfg.RCONPasswordVH, cfg.HTTPTimeout)
 		cmds = append(cmds, commands.NewValheim(vh))
 	} else {
-		log.Info("rcon not configured, skipping minecraft and valheim commands")
+		log.Info("rcon not configured, skipping valheim commands")
 	}
 
 	registry := commands.NewRegistry(cmds...)

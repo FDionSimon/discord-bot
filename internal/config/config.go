@@ -30,8 +30,12 @@ type Config struct {
 	RCONPasswordVH string
 }
 
-func (c *Config) RCONEnabled() bool {
-	return c.RCONAddressMC != "" && c.RCONPasswordMC != "" || c.RCONAddressVH != "" && c.RCONPasswordVH != ""
+func (c *Config) MCEnabled() bool {
+	return c.RCONAddressMC != "" && c.RCONPasswordMC != ""
+}
+
+func (c *Config) VHEnabled() bool {
+	return c.RCONAddressVH != "" && c.RCONPasswordVH != ""
 }
 
 // Load reads configuration from the environment and validates it.
