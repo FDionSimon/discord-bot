@@ -12,7 +12,6 @@ import (
 
 var valhiemActions = map[string]string{
 	"players":      "player list",
-	"findPlayer":   "player info",
 	"eventsList":   "event list",
 	"currentEvent": "current event",
 	"serverStats":  "server stats",
@@ -41,8 +40,10 @@ func (m *Valheim) Definition() *discordgo.ApplicationCommand {
 				Required:    true,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{Name: "List players", Value: "player list"},
-					{Name: "Locate player", Value: "player info"},
 					{Name: "List events", Value: "event list"},
+					{Name: "Current event", Value: "current event"},
+					{Name: "Server stats", Value: "server stats"},
+					{Name: "Boss info", Value: "boss info"},
 				},
 			},
 		},
