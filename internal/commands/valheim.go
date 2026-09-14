@@ -78,6 +78,11 @@ func (m *Valheim) Handle(ctx context.Context, s *discordgo.Session, i *discordgo
 		out = "_(the server returned nothing)_"
 	}
 
+	switch action {
+	case "players":
+		return ReplyEmbed(s, i, renderPlayers(out))
+	}
+
 	return ReplyEmbed(s, i, &discordgo.MessageEmbed{
 		Title: out,
 		Color: ColorSuccess,
