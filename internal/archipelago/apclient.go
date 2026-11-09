@@ -290,8 +290,17 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 			Text: c.render(msg.Data),
 			At:   time.Now(),
 		})
-	}
+	
+	case "InvalidPacket":
+		c.log.Error("server rejected a packet", "raw", string(frame))
 
+
+	default:
+		c.log.Debug("unhandled packet", "cmd", env.Cmd)
+		
+	}
+	
+	
 	return nil
 }
 

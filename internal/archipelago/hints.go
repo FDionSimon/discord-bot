@@ -70,6 +70,7 @@ func (c *Client) subscribeHints(conn *websocket.Conn) error {
 	}
 
 	c.log.Info("watching hints for all slots", "slots", len(keys))
+	c.log.Info("subscribing to hints", "keys", keys)
 	return nil
 }
 
