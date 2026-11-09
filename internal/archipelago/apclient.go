@@ -251,6 +251,7 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		return fmt.Errorf("connection refused: %v (check slot name and password)", ref.Errors)
 
 	case "Retrieved":
+		c.log.Info("retrieved", "raw", string(frame))      // temporary
 		var res Retrieved
 		if err := json.Unmarshal(frame, &res); err != nil {
 			return nil
@@ -270,6 +271,7 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		}
 
 	case "SetReply":
+		c.log.Info("setreply", "raw", string(frame))       // temporary
 		var reply SetReply
 		if err := json.Unmarshal(frame, &reply); err != nil {
 			return nil
@@ -295,7 +297,7 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 
 // emit queues an event, dropping it if the consumer has fallen behind.
 func (c *Client) emit(ev Event) {
-	c.log.Info("emit", "kind", ev.Kind, "text", ev.Text)   // temporary
+	// c.log.Info("emit", "kind", ev.Kind, "text", ev.Text)   // DEBUG
 	if ev.Text == "" {
 		return
 	}
