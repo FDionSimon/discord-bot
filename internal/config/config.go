@@ -64,7 +64,7 @@ func Load() (*Config, error) {
 		APSlot:			strings.TrimSpace(os.Getenv("AP_SLOT")),
 		APPassword:		os.Getenv("AP_PASSWORD"),
 		APChannelID:	strings.TrimSpace(os.Getenv("AP_CHANNEL_ID")),
-		APTLS: 			false,//strings.EqualFold(strings.TrimSpace(os.Getenv("AP_TLS")), "true"),
+		APTLS: 			strings.EqualFold(strings.TrimSpace(os.Getenv("AP_TLS")), true),
 		HTTPTimeout:    durationEnv("HTTP_TIMEOUT", 10*time.Second),
 		CommandTimeout: durationEnv("COMMAND_TIMEOUT", 30*time.Second),
 	}
