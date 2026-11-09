@@ -10,32 +10,44 @@ import (
 // Config holds every runtime setting the bot needs. Everything comes from the
 // environment so the binary stays deployable without a config file.
 type Config struct {
-	// DiscordToken is the bot token from the Discord developer portal.
-	DiscordToken string
-	// AppID is the application (client) ID. Required to register slash commands.
-	AppID string
-	// GuildID scopes command registration to a single guild. Guild commands
-	// update instantly, global commands can take up to an hour to propagate,
-	// so set this during development and leave it empty in production.
-	GuildID string
+	// Discord Info
+	DiscordToken string	// DiscordToken is the bot token from the Discord developer portal.
+	AppID string // AppID is the application (client) ID. Required to register slash commands.
+	GuildID string // GuildID scopes command registration to a single guild. Guild commands update instantly, global commands can take up to an hour to propagate, so set this during development and leave it empty in production.
 
-	// HTTPTimeout bounds a single outbound HTTP request to a third-party API.
-	HTTPTimeout time.Duration
-	// CommandTimeout bounds the total handling of one slash command, including
-	// retries. Keep it under 15 minutes: that is Discord's followup window.
-	CommandTimeout time.Duration
-	RCONAddressMC  string
-	RCONPasswordMC string
-	RCONAddressVH  string
-	RCONPasswordVH string
+	//Timeouts
+	HTTPTimeout time.Duration // HTTPTimeout bounds a single outbound HTTP request to a third-party API.
+	CommandTimeout time.Duration // CommandTimeout bounds the total handling of one slash command, including retries. Keep it under 15 minutes: that is Discord's followup window.
+
+	// Minecraft RCON
+	RCONAddressMC  string // localhost:port
+	RCONPasswordMC string // rcon pw
+	
+	// Valheim RCON
+	RCONAddressVH  string // localhost:port
+	RCONPasswordVH string // rcon pw
+
+	// Archipelago Info
+	APAddress string // Server URL, default: archipelago.gg
+	APSlot string // User slot, select existing user
+	APPassword string // Slot password, default: empty
+	APChannelID string // Discord channel for server output
+	APTLS bool // true: ws:// | false: wss://
 }
 
+// MC Bot enabled
 func (c *Config) MCEnabled() bool {
 	return c.RCONAddressMC != "" && c.RCONPasswordMC != ""
 }
 
+// VH Bot enabled
 func (c *Config) VHEnabled() bool {
 	return c.RCONAddressVH != "" && c.RCONPasswordVH != ""
+}
+
+// AP Bot enabled
+func (c *Config) APEnabled() bool {
+	return c.APAddress != "" && c.APSlot != "" && c.APChannelID != ""
 }
 
 // Load reads configuration from the environment and validates it.
@@ -48,6 +60,11 @@ func Load() (*Config, error) {
 		RCONPasswordMC: strings.TrimSpace(os.Getenv("RCON_PASSWORD_MC")),
 		RCONAddressVH:  strings.TrimSpace(os.Getenv("RCON_ADDRESS_VH")),
 		RCONPasswordVH: strings.TrimSpace(os.Getenv("RCON_PASSWORD_VH")),
+		APAddress:		strings.TrimSpace(os.Getenv("AP_ADDRESS")),
+		APSlot:			strings.TrimSpace(os.Getenv("AP_SLOT")),
+		APPassword:		os.Getenv("AP_PASSWORD"),
+		APChannelID:	strings.TrimSpace(os.Getenv("AP_CHANNEL_ID")),
+		APTLS: 			strings.EqualFold(strings.TrimSpace(os.Getenv("AP_TLS")), "true"),
 		HTTPTimeout:    durationEnv("HTTP_TIMEOUT", 10*time.Second),
 		CommandTimeout: durationEnv("COMMAND_TIMEOUT", 30*time.Second),
 	}

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/FDionSimon/discord-bot/internal/archipelago"
 	"github.com/FDionSimon/discord-bot/internal/bot"
 	"github.com/FDionSimon/discord-bot/internal/commands"
 	"github.com/FDionSimon/discord-bot/internal/config"
@@ -49,9 +51,29 @@ func main() {
 		os.Exit(1)
 	}
 
+	workerCtx, stopWorkers := context.WithCancel(context.Background())
+	defer stopWorkers()
+
 	if err := b.Start(); err != nil {
 		log.Error("failed to start bot", "error", err)
 		os.Exit(1)
+	}
+
+	// Keep Alive
+	if cfg.APEnabled() {
+		ap := archipelago.New(archipelago.Config{
+			Address:  cfg.APAddress,
+			Slot:     cfg.APSlot,
+			Password: cfg.APPassword,
+			TLS:      cfg.APTLS,
+		}, log)
+ 
+		go ap.Run(workerCtx)
+		go archipelago.NewRelay(b.Session(), cfg.APChannelID, ap, log).Run(workerCtx)
+ 
+		log.Info("archipelago relay started", "address", cfg.APAddress, "channel", cfg.APChannelID)
+	} else {
+		log.Info("archipelago not configured, skipping event relay")
 	}
 
 	// Block until the process is asked to stop, then close the gateway cleanly
@@ -59,6 +81,8 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
+
+	stopWorkers()
 
 	if err := b.Stop(); err != nil {
 		log.Error("error during shutdown", "error", err)
