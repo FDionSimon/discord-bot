@@ -42,6 +42,10 @@ type Client struct {
 	events  chan Event
 	dropped int64
 
+	// writeMu serializes writes: gorilla/websocket forbids concurrent
+	// writers, and the hint poller sends from its own goroutine.
+	writeMu sync.Mutex
+
 	mu sync.RWMutex
 	// slotNames maps slot number to display name.
 	slotNames map[int]string
@@ -162,6 +166,10 @@ func (c *Client) session(ctx context.Context) error {
 
 	c.log.Info("archipelago connected", "address", c.cfg.Address)
 
+	// Re-read hint storage on a timer, so a missed SetReply does not mean a
+	// missed hint. Stops with the session via done.
+	go c.pollHints(conn, done)
+
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
@@ -202,10 +210,10 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 
 		// Ask for the ID tables of only the games in this multiworld, then
 		// authenticate. The server answers both in order.
-		if err := send(conn, GetDataPackage{Cmd: "GetDataPackage", Games: info.Games}); err != nil {
+		if err := c.send(conn, GetDataPackage{Cmd: "GetDataPackage", Games: info.Games}); err != nil {
 			return err
 		}
-		return send(conn, Connect{
+		return c.send(conn, Connect{
 			Cmd:           "Connect",
 			Password:      c.cfg.Password,
 			Game:          "", // allowed, and game validation skipped, with TextOnly
@@ -251,7 +259,6 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		return fmt.Errorf("connection refused: %v (check slot name and password)", ref.Errors)
 
 	case "Retrieved":
-		c.log.Info("retrieved", "raw", string(frame))      // temporary
 		var res Retrieved
 		if err := json.Unmarshal(frame, &res); err != nil {
 			return nil
@@ -271,7 +278,6 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		}
 
 	case "SetReply":
-		c.log.Info("setreply", "raw", string(frame))       // temporary
 		var reply SetReply
 		if err := json.Unmarshal(frame, &reply); err != nil {
 			return nil
@@ -290,23 +296,13 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 			Text: c.render(msg.Data),
 			At:   time.Now(),
 		})
-	
-	case "InvalidPacket":
-		c.log.Error("server rejected a packet", "raw", string(frame))
-
-
-	default:
-		c.log.Debug("unhandled packet", "cmd", env.Cmd)
-		
 	}
-	
-	
+
 	return nil
 }
 
 // emit queues an event, dropping it if the consumer has fallen behind.
 func (c *Client) emit(ev Event) {
-	// c.log.Info("emit", "kind", ev.Kind, "text", ev.Text)   // DEBUG
 	if ev.Text == "" {
 		return
 	}
@@ -368,7 +364,11 @@ func (c *Client) ingestSlotInfo(info map[string]NetworkSlot) {
 }
 
 // send marshals a packet into the single-element array the protocol expects.
-func send(conn *websocket.Conn, packet any) error {
+// It locks because more than one goroutine writes to the socket.
+func (c *Client) send(conn *websocket.Conn, packet any) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
 	payload, err := json.Marshal([]any{packet})
 	if err != nil {
 		return fmt.Errorf("encode packet: %w", err)

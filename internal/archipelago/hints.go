@@ -14,16 +14,27 @@ import (
 // PrintJSON hint messages only reach the slots a hint concerns, so a relay
 // connected as one player sees a fraction of what happens. The server also
 // mirrors every slot's hints into a read-only data storage key, which any
-// client may read. Subscribing to all of them gives the full picture.
+// client may read.
 //
-// The flow is: Get every key once to learn the current state, then SetNotify
-// to be told about changes. The initial Get is recorded without emitting
-// anything, otherwise connecting mid-game would replay every hint ever made
-// into the Discord channel.
+// Two mechanisms read those keys, and this client uses both:
+//
+//   - SetNotify asks the server to push a SetReply whenever a key changes.
+//     Cheap and immediate, but it only fires when a hint is actually created
+//     and stored.
+//   - A periodic Get re-reads every key. Costlier, but it does not depend on
+//     the server pushing anything, so it still works when a notification is
+//     missed or never sent.
+//
+// Both funnel into ingestHints, which announces only what it has not seen, so
+// running both produces no duplicates.
 
 // defaultTeam is team 0. Multiworlds with more than one team are rare, and
 // slot_info does not report team numbers, so this client assumes one team.
 const defaultTeam = 0
+
+// hintPollInterval is how often every hint key is re-read. Short enough that a
+// Discord feed stays useful, long enough not to hammer the server.
+const hintPollInterval = 20 * time.Second
 
 // hintID identifies a hint well enough to notice a repeat. The tuple is
 // stable: a hint for a given item at a given location between two players is
@@ -48,37 +59,78 @@ func (h Hint) id() hintID {
 	}
 }
 
-// subscribeHints asks for every slot's hints and registers for updates.
-// Called once the roster is known, since slot numbers come from slot_info.
-func (c *Client) subscribeHints(conn *websocket.Conn) error {
+// hintKeys returns the storage keys for every slot this client knows about.
+func (c *Client) hintKeys() []string {
 	c.mu.RLock()
-	keys := make([]string, 0, len(c.slotGames))
+	defer c.mu.RUnlock()
+
+	slots := make(map[int]bool, len(c.slotGames))
 	for slot := range c.slotGames {
+		slots[slot] = true
+	}
+	// slot_info is the complete list, but it is absent on some servers. The
+	// roster only covers connected players, which is better than nothing.
+	for slot := range c.slotNames {
+		slots[slot] = true
+	}
+
+	keys := make([]string, 0, len(slots))
+	for slot := range slots {
 		keys = append(keys, HintsKey(defaultTeam, slot))
 	}
-	c.mu.RUnlock()
+	return keys
+}
 
+// subscribeHints registers for push updates and reads the current state.
+func (c *Client) subscribeHints(conn *websocket.Conn) error {
+	keys := c.hintKeys()
 	if len(keys) == 0 {
+		c.log.Warn("no slots known, hint watching disabled")
 		return nil
 	}
 
-	if err := send(conn, Get{Cmd: "Get", Keys: keys}); err != nil {
-		return fmt.Errorf("get hints: %w", err)
-	}
-	if err := send(conn, SetNotify{Cmd: "SetNotify", Keys: keys}); err != nil {
+	if err := c.send(conn, SetNotify{Cmd: "SetNotify", Keys: keys}); err != nil {
 		return fmt.Errorf("subscribe hints: %w", err)
 	}
+	if err := c.send(conn, Get{Cmd: "Get", Keys: keys}); err != nil {
+		return fmt.Errorf("get hints: %w", err)
+	}
 
-	c.log.Info("watching hints for all slots", "slots", len(keys))
-	c.log.Info("subscribing to hints", "keys", keys)
+	c.log.Info("watching hints", "keys", keys, "poll", hintPollInterval)
 	return nil
+}
+
+// pollHints re-reads every hint key until the connection closes.
+//
+// This runs on its own goroutine, which is why writes go through Client.send:
+// gorilla/websocket does not allow concurrent writers, and the read loop also
+// sends from the handler.
+func (c *Client) pollHints(conn *websocket.Conn, done <-chan struct{}) {
+	ticker := time.NewTicker(hintPollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			keys := c.hintKeys()
+			if len(keys) == 0 {
+				continue
+			}
+			if err := c.send(conn, Get{Cmd: "Get", Keys: keys}); err != nil {
+				// The read loop will notice the same failure and reconnect.
+				return
+			}
+		}
+	}
 }
 
 // ingestHints decodes a hint list and emits the ones not seen before.
 //
-// When prime is true the hints are recorded silently. That is the initial Get:
-// those hints already happened, and announcing them would flood the channel on
-// every reconnect.
+// When prime is true the hints are recorded silently. That is the first
+// snapshot: those hints already happened, and announcing them would flood the
+// channel on startup.
 func (c *Client) ingestHints(raw json.RawMessage, prime bool) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return
@@ -86,7 +138,7 @@ func (c *Client) ingestHints(raw json.RawMessage, prime bool) {
 
 	var hints []Hint
 	if err := json.Unmarshal(raw, &hints); err != nil {
-		c.log.Warn("unreadable hint list", "error", err)
+		c.log.Warn("unreadable hint list", "error", err, "raw", string(raw))
 		return
 	}
 
