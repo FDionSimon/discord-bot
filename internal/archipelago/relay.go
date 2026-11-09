@@ -94,6 +94,7 @@ func (r *Relay) Run(ctx context.Context) {
 
 // flush posts one message, splitting if the batch still exceeds the limit.
 func (r *Relay) flush(batch []string) {
+	r.log.Info("flush", "lines", len(batch), "channel", r.channelID)   // temporary
 	if len(batch) == 0 {
 		return
 	}

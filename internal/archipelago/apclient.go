@@ -295,6 +295,7 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 
 // emit queues an event, dropping it if the consumer has fallen behind.
 func (c *Client) emit(ev Event) {
+	c.log.Info("emit", "kind", ev.Kind, "text", ev.Text)   // temporary
 	if ev.Text == "" {
 		return
 	}
