@@ -25,7 +25,7 @@ type Config struct {
 	// Password is the room password, empty if the room is open.
 	Password string
 	// TLS selects wss:// instead of ws://.
-	TLS bool
+	// TLS bool
 }
 
 // Client watches one Archipelago multiworld and emits rendered event strings.
@@ -135,10 +135,10 @@ func (c *Client) Run(ctx context.Context) {
 
 // session runs one connection from dial to disconnect.
 func (c *Client) session(ctx context.Context) error {
-	scheme := "ws"
-	if c.cfg.TLS {
-		scheme = "wss"
-	}
+	scheme := "wss"
+	// if c.cfg.TLS {
+	// 	scheme = "wss"
+	// }
 	endpoint := fmt.Sprintf("%s://%s", scheme, c.cfg.Address)
 
 	dialer := websocket.Dialer{HandshakeTimeout: 15 * time.Second}

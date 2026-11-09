@@ -32,7 +32,7 @@ type Config struct {
 	APSlot string // User slot, select existing user
 	APPassword string // Slot password, default: empty
 	APChannelID string // Discord channel for server output
-	APTLS bool // true: ws:// | false: wss://
+	// APTLS bool // true: ws:// | false: wss://
 }
 
 // MC Bot enabled
@@ -64,7 +64,7 @@ func Load() (*Config, error) {
 		APSlot:			strings.TrimSpace(os.Getenv("AP_SLOT")),
 		APPassword:		os.Getenv("AP_PASSWORD"),
 		APChannelID:	strings.TrimSpace(os.Getenv("AP_CHANNEL_ID")),
-		APTLS: 			os.Getenv("AP_TLS"), true,
+		// APTLS: 			os.Getenv("AP_TLS"), true,
 		HTTPTimeout:    durationEnv("HTTP_TIMEOUT", 10*time.Second),
 		CommandTimeout: durationEnv("COMMAND_TIMEOUT", 30*time.Second),
 	}
