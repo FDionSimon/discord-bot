@@ -13,6 +13,7 @@ package archipelago
 import (
 	"encoding/json"
 	"strconv"
+	"strings"
 )
 
 // Version identifies an Archipelago build. The Class field is required by the
@@ -116,6 +117,9 @@ type PrintJSON struct {
 	Found     *bool        `json:"found"`
 	Countdown *int         `json:"countdown"`
 	Slot      int          `json:"slot"`
+	// Message is the raw text of a Chat packet, before rendering. It is how
+	// a client command such as "!hint Lamp" can be recognized.
+	Message string `json:"message"`
 }
 
 // GameData holds one game's ID tables. The server sends name-to-ID; this
@@ -205,4 +209,18 @@ type Hint struct {
 // HintsKey builds the read-only storage key holding one slot's hints.
 func HintsKey(team, slot int) string {
 	return "_read_hints_" + strconv.Itoa(team) + "_" + strconv.Itoa(slot)
+}
+
+// SlotFromHintsKey reads the slot number back out of a hints key.
+func SlotFromHintsKey(key string) (int, bool) {
+	const prefix = "_read_hints_"
+	if !strings.HasPrefix(key, prefix) {
+		return 0, false
+	}
+	parts := strings.Split(strings.TrimPrefix(key, prefix), "_")
+	if len(parts) != 2 {
+		return 0, false
+	}
+	slot, err := strconv.Atoi(parts[1])
+	return slot, err == nil
 }

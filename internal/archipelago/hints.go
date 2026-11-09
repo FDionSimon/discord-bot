@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -131,7 +132,7 @@ func (c *Client) pollHints(conn *websocket.Conn, done <-chan struct{}) {
 // When prime is true the hints are recorded silently. That is the first
 // snapshot: those hints already happened, and announcing them would flood the
 // channel on startup.
-func (c *Client) ingestHints(raw json.RawMessage, prime bool) {
+func (c *Client) ingestHints(key string, raw json.RawMessage, prime bool) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return
 	}
@@ -140,6 +141,13 @@ func (c *Client) ingestHints(raw json.RawMessage, prime bool) {
 	if err := json.Unmarshal(raw, &hints); err != nil {
 		c.log.Warn("unreadable hint list", "error", err, "raw", string(raw))
 		return
+	}
+
+	// Cache the list so a !hint command in chat can be answered from it.
+	if slot, ok := SlotFromHintsKey(key); ok {
+		c.mu.Lock()
+		c.hintsBySlot[slot] = hints
+		c.mu.Unlock()
 	}
 
 	for _, h := range hints {
@@ -188,4 +196,93 @@ func (c *Client) renderHint(h Hint) string {
 	}
 
 	return msg
+}
+
+// handleHintCommand answers a !hint seen in chat from cached storage.
+//
+// The server treats re-displaying an existing hint as a no-op: nothing is
+// written, and the result goes only to the slots the hint concerns. A relay
+// watching from outside sees the command but never the answer. Since the hints
+// themselves are already in storage, and the poller keeps them fresh, the
+// answer can be reconstructed locally.
+//
+// This deliberately bypasses the seen-hint dedupe: the player asked, so the
+// repeat is the point.
+func (c *Client) handleHintCommand(slot int, message string) {
+	query, ok := parseHintCommand(message)
+	if !ok {
+		return
+	}
+
+	c.mu.RLock()
+	hints := append([]Hint(nil), c.hintsBySlot[slot]...)
+	asker := c.playerName(strconv.Itoa(slot))
+	c.mu.RUnlock()
+
+	if len(hints) == 0 {
+		return
+	}
+
+	matches := make([]Hint, 0, len(hints))
+	for _, h := range hints {
+		// An empty query is a bare !hint, which lists everything that slot has.
+		if query == "" || c.hintMatches(h, query) {
+			matches = append(matches, h)
+		}
+	}
+	if len(matches) == 0 {
+		return
+	}
+
+	// Cap it: a long-running slot can accumulate a lot of hints, and a bare
+	// !hint would otherwise dump all of them into the channel.
+	const maxListed = 10
+	truncated := 0
+	if len(matches) > maxListed {
+		truncated = len(matches) - maxListed
+		matches = matches[:maxListed]
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s looked up a hint:", asker)
+	for _, h := range matches {
+		b.WriteString("\n• ")
+		b.WriteString(c.renderHint(h))
+	}
+	if truncated > 0 {
+		fmt.Fprintf(&b, "\n_...and %d more_", truncated)
+	}
+
+	c.emit(Event{Kind: "Hint", Text: b.String(), At: time.Now()})
+}
+
+// hintMatches reports whether a hint's item or location name contains query.
+func (c *Client) hintMatches(h Hint, query string) bool {
+	c.mu.RLock()
+	item := c.lookupName(c.itemNames, h.ReceivingPlayer, strconv.FormatInt(h.Item, 10), "item")
+	location := c.lookupName(c.locationNames, h.FindingPlayer, strconv.FormatInt(h.Location, 10), "location")
+	c.mu.RUnlock()
+
+	query = strings.ToLower(query)
+	return strings.Contains(strings.ToLower(item), query) ||
+		strings.Contains(strings.ToLower(location), query)
+}
+
+// parseHintCommand pulls the search text out of a !hint or !hint_location
+// command. The second return is false when the message is not a hint command.
+func parseHintCommand(message string) (query string, ok bool) {
+	message = strings.TrimSpace(message)
+
+	for _, prefix := range []string{"!hint_location", "!hint"} {
+		if !strings.HasPrefix(message, prefix) {
+			continue
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(message, prefix))
+		// "!hintsomething" is not a hint command.
+		if rest != "" && !strings.HasPrefix(strings.TrimPrefix(message, prefix), " ") {
+			return "", false
+		}
+		return rest, true
+	}
+	return "", false
 }

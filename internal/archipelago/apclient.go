@@ -57,6 +57,10 @@ type Client struct {
 	locationNames map[string]map[int64]string
 	seedName      string
 
+	// hintsBySlot caches each slot's current hints, so a !hint command seen
+	// in chat can be answered without another round trip.
+	hintsBySlot map[int][]Hint
+
 	// seenHints dedupes hints across reconnects, since the server resends the
 	// full list on every Get rather than only what changed.
 	seenHints map[hintID]bool
@@ -86,6 +90,7 @@ func New(cfg Config, log *slog.Logger) *Client {
 		itemNames:     map[string]map[int64]string{},
 		locationNames: map[string]map[int64]string{},
 		seenHints:     map[hintID]bool{},
+		hintsBySlot:   map[int][]Hint{},
 	}
 }
 
@@ -273,7 +278,7 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 
 		for key, value := range res.Keys {
 			if strings.HasPrefix(key, "_read_hints_") {
-				c.ingestHints(value, prime)
+				c.ingestHints(key, value, prime)
 			}
 		}
 
@@ -283,7 +288,7 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 			return nil
 		}
 		if strings.HasPrefix(reply.Key, "_read_hints_") {
-			c.ingestHints(reply.Value, false)
+			c.ingestHints(reply.Key, reply.Value, false)
 		}
 
 	case "PrintJSON":
@@ -296,6 +301,14 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 			Text: c.render(msg.Data),
 			At:   time.Now(),
 		})
+
+		// Re-displaying an existing hint writes nothing to storage, so the
+		// server sends it only to the slots it concerns and this client never
+		// sees it. The chat line is visible though, so answer the command
+		// from the cached storage instead.
+		if msg.Type == "Chat" {
+			c.handleHintCommand(msg.Slot, msg.Message)
+		}
 	}
 
 	return nil
