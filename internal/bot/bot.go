@@ -70,6 +70,10 @@ func (b *Bot) Start() error {
 	return nil
 }
 
+// Session exposes the underlying Discord session, for background workers that
+// push messages rather than answering slash commands.
+func (b *Bot) Session() *discordgo.Session { return b.session }
+
 // Stop closes the gateway connection.
 func (b *Bot) Stop() error {
 	b.log.Info("shutting down")
