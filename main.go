@@ -65,7 +65,6 @@ func main() {
 			Address:  cfg.APAddress,
 			Slot:     cfg.APSlot,
 			Password: cfg.APPassword,
-			// TLS:      cfg.APTLS,
 		}, log)
  
 		go ap.Run(workerCtx)

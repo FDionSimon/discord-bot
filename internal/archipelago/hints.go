@@ -3,6 +3,7 @@ package archipelago
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -215,9 +216,16 @@ func (c *Client) handleHintCommand(slot int, message string) {
 	}
 
 	c.mu.RLock()
+	own := c.ownSlot
 	hints := append([]Hint(nil), c.hintsBySlot[slot]...)
 	asker := c.playerName(strconv.Itoa(slot))
 	c.mu.RUnlock()
+
+	// Hints for our own slot reach us as ordinary PrintJSON messages, so
+	// answering the command here as well would post everything twice.
+	if slot == own {
+		return
+	}
 
 	if len(hints) == 0 {
 		return
@@ -234,25 +242,32 @@ func (c *Client) handleHintCommand(slot int, message string) {
 		return
 	}
 
-	// Cap it: a long-running slot can accumulate a lot of hints, and a bare
-	// !hint would otherwise dump all of them into the channel.
-	const maxListed = 10
-	truncated := 0
-	if len(matches) > maxListed {
-		truncated = len(matches) - maxListed
-		matches = matches[:maxListed]
+	// Outstanding hints first. They are the actionable ones, and on a slot
+	// with a long history the found ones would otherwise fill the whole list
+	// and push everything useful into the truncation notice.
+	// SliceStable keeps the server's ordering within each group.
+	sort.SliceStable(matches, func(i, j int) bool {
+		return !matches[i].Found && matches[j].Found
+	})
+
+	outstanding := 0
+	for _, h := range matches {
+		if !h.Found {
+			outstanding++
+		}
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s looked up a hint:", asker)
+	fmt.Fprintf(&b, "%s looked up a hint", asker)
+	if outstanding > 0 {
+		fmt.Fprintf(&b, " (%d outstanding)", outstanding)
+	}
+	b.WriteString(":")
+
 	for _, h := range matches {
 		b.WriteString("\n• ")
 		b.WriteString(c.renderHint(h))
 	}
-	if truncated > 0 {
-		fmt.Fprintf(&b, "\n_...and %d more_", truncated)
-	}
-
 	c.emit(Event{Kind: "Hint", Text: b.String(), At: time.Now()})
 }
 

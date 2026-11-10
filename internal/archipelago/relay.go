@@ -94,7 +94,6 @@ func (r *Relay) Run(ctx context.Context) {
 
 // flush posts one message, splitting if the batch still exceeds the limit.
 func (r *Relay) flush(batch []string) {
-	// r.log.Info("flush", "lines", len(batch), "channel", r.channelID)   // DEBUG
 	if len(batch) == 0 {
 		return
 	}
@@ -151,8 +150,19 @@ func size(batch []string) int {
 	return n
 }
 
-// chunk joins lines into messages no longer than max characters.
-func chunk(lines []string, max int) []string {
+// chunk packs lines into messages no longer than max characters.
+//
+// An entry may itself span several lines: a hint lookup is one event holding a
+// whole list. Those are split on their own newlines so a long list becomes
+// several Discord messages rather than one truncated one. Only a single line
+// that exceeds max on its own is cut, which no realistic hint does.
+func chunk(entries []string, max int) []string {
+	// Flatten to individual lines first, so splits land between them.
+	var lines []string
+	for _, entry := range entries {
+		lines = append(lines, strings.Split(entry, "\n")...)
+	}
+
 	var out []string
 	var current strings.Builder
 

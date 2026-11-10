@@ -24,8 +24,6 @@ type Config struct {
 	Slot string
 	// Password is the room password, empty if the room is open.
 	Password string
-	// TLS selects wss:// instead of ws://.
-	// TLS bool
 }
 
 // Client watches one Archipelago multiworld and emits rendered event strings.
@@ -56,6 +54,11 @@ type Client struct {
 	itemNames     map[string]map[int64]string
 	locationNames map[string]map[int64]string
 	seedName      string
+
+	// ownSlot is the slot this client authenticated as. Hints concerning it
+	// arrive as ordinary PrintJSON, so the chat-triggered lookup skips it to
+	// avoid reporting the same hints twice.
+	ownSlot int
 
 	// hintsBySlot caches each slot's current hints, so a !hint command seen
 	// in chat can be answered without another round trip.
@@ -144,11 +147,9 @@ func (c *Client) Run(ctx context.Context) {
 
 // session runs one connection from dial to disconnect.
 func (c *Client) session(ctx context.Context) error {
-	scheme := "wss"
-	// if c.cfg.TLS {
-	// 	scheme = "wss"
-	// }
-	endpoint := fmt.Sprintf("%s://%s", scheme, c.cfg.Address)
+	// Always wss. Archipelago sends the room password and every chat message
+	// in the clear over ws, and public hosts terminate TLS on the room port.
+	endpoint := fmt.Sprintf("wss://%s", c.cfg.Address)
 
 	dialer := websocket.Dialer{HandshakeTimeout: 15 * time.Second}
 	conn, _, err := dialer.DialContext(ctx, endpoint, nil)
@@ -242,6 +243,10 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		if err := json.Unmarshal(frame, &con); err != nil {
 			return fmt.Errorf("decode Connected: %w", err)
 		}
+		c.mu.Lock()
+		c.ownSlot = con.Slot
+		c.mu.Unlock()
+
 		c.ingestRoster(con.Players)
 		c.ingestSlotInfo(con.SlotInfo)
 		c.log.Info("archipelago authenticated", "slot", c.cfg.Slot, "players", len(con.Players))
