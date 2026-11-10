@@ -32,6 +32,7 @@ type Config struct {
 	APSlot string // User slot, select existing user
 	APPassword string // Slot password, default: empty
 	APChannelID string // Discord channel for server output
+	APStateFile string // StateFile for game progress
 }
 
 // MC Bot enabled
@@ -63,6 +64,7 @@ func Load() (*Config, error) {
 		APSlot:			strings.TrimSpace(os.Getenv("AP_SLOT")),
 		APPassword:		os.Getenv("AP_PASSWORD"),
 		APChannelID:	strings.TrimSpace(os.Getenv("AP_CHANNEL_ID")),
+		APStateFile:    stringEnv("AP_STATE_FILE", "archipelago-state.json"),
 		HTTPTimeout:    durationEnv("HTTP_TIMEOUT", 10*time.Second),
 		CommandTimeout: durationEnv("COMMAND_TIMEOUT", 30*time.Second),
 	}
@@ -79,6 +81,16 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// stringEnv reads a string setting, falling back when it is unset. An
+// explicitly empty value is kept, so a setting can be switched off.
+func stringEnv(key, fallback string) string {
+	value, set := os.LookupEnv(key)
+	if !set {
+		return fallback
+	}
+	return strings.TrimSpace(value)
 }
 
 func durationEnv(key string, fallback time.Duration) time.Duration {

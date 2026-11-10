@@ -34,9 +34,9 @@ import (
 // slot_info does not report team numbers, so this client assumes one team.
 const defaultTeam = 0
 
-// hintPollInterval is how often every hint key is re-read. Short enough that a
-// Discord feed stays useful, long enough not to hammer the server.
-const hintPollInterval = 20 * time.Second
+// storagePollInterval is how often every watched key is re-read. Short enough
+// that a Discord feed stays useful, long enough not to hammer the server.
+const storagePollInterval = 20 * time.Second
 
 // hintID identifies a hint well enough to notice a repeat. The tuple is
 // stable: a hint for a given item at a given location between two players is
@@ -61,8 +61,13 @@ func (h Hint) id() hintID {
 	}
 }
 
-// hintKeys returns the storage keys for every slot this client knows about.
-func (c *Client) hintKeys() []string {
+// storageKeys returns the read-only keys this client watches: one hint key and
+// one client-status key per slot.
+//
+// Goal status lives in storage for the same reason hints do. A PrintJSON Goal
+// message is broadcast once, so a bot that was offline at that moment would
+// never learn of it; the storage key can be read at any time.
+func (c *Client) storageKeys() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -76,39 +81,39 @@ func (c *Client) hintKeys() []string {
 		slots[slot] = true
 	}
 
-	keys := make([]string, 0, len(slots))
+	keys := make([]string, 0, len(slots)*2)
 	for slot := range slots {
-		keys = append(keys, HintsKey(defaultTeam, slot))
+		keys = append(keys, HintsKey(defaultTeam, slot), ClientStatusKey(defaultTeam, slot))
 	}
 	return keys
 }
 
-// subscribeHints registers for push updates and reads the current state.
-func (c *Client) subscribeHints(conn *websocket.Conn) error {
-	keys := c.hintKeys()
+// subscribeStorage registers for push updates and reads the current state.
+func (c *Client) subscribeStorage(conn *websocket.Conn) error {
+	keys := c.storageKeys()
 	if len(keys) == 0 {
-		c.log.Warn("no slots known, hint watching disabled")
+		c.log.Warn("no slots known, storage watching disabled")
 		return nil
 	}
 
 	if err := c.send(conn, SetNotify{Cmd: "SetNotify", Keys: keys}); err != nil {
-		return fmt.Errorf("subscribe hints: %w", err)
+		return fmt.Errorf("subscribe to storage: %w", err)
 	}
 	if err := c.send(conn, Get{Cmd: "Get", Keys: keys}); err != nil {
-		return fmt.Errorf("get hints: %w", err)
+		return fmt.Errorf("read storage: %w", err)
 	}
 
-	c.log.Info("watching hints", "keys", keys, "poll", hintPollInterval)
+	c.log.Info("watching hints and goal status", "keys", keys, "poll", storagePollInterval)
 	return nil
 }
 
-// pollHints re-reads every hint key until the connection closes.
+// pollStorage re-reads every watched key until the connection closes.
 //
 // This runs on its own goroutine, which is why writes go through Client.send:
 // gorilla/websocket does not allow concurrent writers, and the read loop also
 // sends from the handler.
-func (c *Client) pollHints(conn *websocket.Conn, done <-chan struct{}) {
-	ticker := time.NewTicker(hintPollInterval)
+func (c *Client) pollStorage(conn *websocket.Conn, done <-chan struct{}) {
+	ticker := time.NewTicker(storagePollInterval)
 	defer ticker.Stop()
 
 	for {
@@ -116,7 +121,7 @@ func (c *Client) pollHints(conn *websocket.Conn, done <-chan struct{}) {
 		case <-done:
 			return
 		case <-ticker.C:
-			keys := c.hintKeys()
+			keys := c.storageKeys()
 			if len(keys) == 0 {
 				continue
 			}

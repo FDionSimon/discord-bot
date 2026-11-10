@@ -214,9 +214,33 @@ func HintsKey(team, slot int) string {
 	return "_read_hints_" + strconv.Itoa(team) + "_" + strconv.Itoa(slot)
 }
 
+// ClientStatusKey builds the read-only storage key holding one slot's status.
+//
+// The value is a bare integer, not a list: the server stores
+// client_game_state[team, slot] there directly.
+func ClientStatusKey(team, slot int) string {
+	return "_read_client_status_" + strconv.Itoa(team) + "_" + strconv.Itoa(slot)
+}
+
+// HintsKeyPrefix and ClientStatusKeyPrefix identify the two read-only key
+// families this client subscribes to.
+const (
+	HintsKeyPrefix        = "_read_hints_"
+	ClientStatusKeyPrefix = "_read_client_status_"
+)
+
 // SlotFromHintsKey reads the slot number back out of a hints key.
 func SlotFromHintsKey(key string) (int, bool) {
-	const prefix = "_read_hints_"
+	return slotFromKey(key, HintsKeyPrefix)
+}
+
+// SlotFromClientStatusKey reads the slot number back out of a status key.
+func SlotFromClientStatusKey(key string) (int, bool) {
+	return slotFromKey(key, ClientStatusKeyPrefix)
+}
+
+// slotFromKey parses the trailing "{team}_{slot}" of a read-only key.
+func slotFromKey(key, prefix string) (int, bool) {
 	if !strings.HasPrefix(key, prefix) {
 		return 0, false
 	}
@@ -227,6 +251,25 @@ func SlotFromHintsKey(key string) (int, bool) {
 	slot, err := strconv.Atoi(parts[1])
 	return slot, err == nil
 }
+
+// ClientStatus values, from NetUtils.ClientStatus. A slot that has never
+// connected reads as StatusUnknown, so "not goaled" is the safe default.
+const (
+	StatusUnknown   = 0
+	StatusConnected = 5
+	StatusReady     = 10
+	StatusPlaying   = 20
+	StatusGoal      = 30
+)
+
+// SlotType values, from NetUtils.SlotType. Only SlotPlayer slots are real
+// players: group slots exist for item links and never reach a goal, so
+// counting them would mean a multiworld could never complete.
+const (
+	SlotSpectator = 0
+	SlotPlayer    = 1
+	SlotGroup     = 2
+)
 
 // HintStatus values, from NetUtils.HintStatus.
 const (

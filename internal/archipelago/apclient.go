@@ -50,6 +50,9 @@ type Client struct {
 	// slotGames maps slot number to game name, needed to pick the right ID
 	// table when resolving an item or location.
 	slotGames map[int]string
+	// slotTypes maps slot number to SlotType. Only SlotPlayer slots count as
+	// players: item-link groups appear in slot_info too and never goal.
+	slotTypes map[int]int
 	// itemNames and locationNames are game name to ID to display name.
 	itemNames     map[string]map[int64]string
 	locationNames map[string]map[int64]string
@@ -71,6 +74,10 @@ type Client struct {
 	// That first snapshot is recorded silently; later ones announce whatever
 	// is new, which is how hints made while disconnected still get reported.
 	hintsPrimed bool
+
+	// tracker marks the start and end of a playthrough. Optional: nil simply
+	// means no start or finish banners.
+	tracker *Playthrough
 }
 
 // Event is one rendered message from the multiworld.
@@ -90,11 +97,42 @@ func New(cfg Config, log *slog.Logger) *Client {
 		events:        make(chan Event, 256),
 		slotNames:     map[int]string{},
 		slotGames:     map[int]string{},
+		slotTypes:     map[int]int{},
 		itemNames:     map[string]map[int64]string{},
 		locationNames: map[string]map[int64]string{},
 		seenHints:     map[hintID]bool{},
 		hintsBySlot:   map[int][]Hint{},
 	}
+}
+
+// Emit posts an event into the stream as though it came from the server.
+// The playthrough tracker uses it for its own banners.
+func (c *Client) Emit(ev Event) { c.emit(ev) }
+
+// Track attaches a playthrough tracker, which posts start and finish
+// banners. Call it before Run.
+func (c *Client) Track(t *Playthrough) { c.tracker = t }
+
+// Participants returns the real player slots, excluding item-link groups and
+// spectators.
+//
+// When slot_info was not received there are no types to filter on, so every
+// known slot is treated as a player: a roster that is slightly too wide is
+// better than one that is empty, which would make completion unreachable.
+func (c *Client) Participants() []Participant {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	haveTypes := len(c.slotTypes) > 0
+	out := make([]Participant, 0, len(c.slotNames))
+
+	for slot, name := range c.slotNames {
+		if haveTypes && c.slotTypes[slot] != SlotPlayer {
+			continue
+		}
+		out = append(out, Participant{Slot: slot, Name: name, Game: c.slotGames[slot]})
+	}
+	return out
 }
 
 // Events returns the stream of rendered events. It is never closed; cancel the
@@ -178,9 +216,9 @@ func (c *Client) session(ctx context.Context) error {
 
 	c.log.Info("archipelago connected", "address", c.cfg.Address)
 
-	// Re-read hint storage on a timer, so a missed SetReply does not mean a
-	// missed hint. Stops with the session via done.
-	go c.pollHints(conn, done)
+	// Re-read storage on a timer, so a missed SetReply does not mean a missed
+	// hint or an unnoticed goal. Stops with the session via done.
+	go c.pollStorage(conn, done)
 
 	for {
 		_, raw, err := conn.ReadMessage()
@@ -257,14 +295,22 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		c.ingestSlotInfo(con.SlotInfo)
 		c.log.Info("archipelago authenticated", "slot", c.cfg.Slot, "players", len(con.Players))
 
-		// Hint messages only reach the slots they concern, so subscribe to
-		// every slot's hint storage to see the whole multiworld.
-		return c.subscribeHints(conn)
+		if c.tracker != nil {
+			c.tracker.SetRoster(c.Participants())
+			c.tracker.Begin(c.SeedName())
+		}
+
+		// Hints and goal status both reach us only through data storage, so
+		// subscribe to every slot's keys to see the whole multiworld.
+		return c.subscribeStorage(conn)
 
 	case "RoomUpdate":
 		var upd RoomUpdate
 		if err := json.Unmarshal(frame, &upd); err == nil && len(upd.Players) > 0 {
 			c.ingestRoster(upd.Players)
+			if c.tracker != nil {
+				c.tracker.SetRoster(c.Participants())
+			}
 		}
 
 	case "ConnectionRefused":
@@ -279,17 +325,20 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		if err := json.Unmarshal(frame, &res); err != nil {
 			return nil
 		}
-		// The first snapshot is recorded without announcing: those hints
+		// The first snapshot is recorded without announcing: whatever it holds
 		// already happened. Later snapshots, after a reconnect, announce
-		// anything the dedupe set has not seen.
+		// anything the dedupe sets have not seen.
 		c.mu.Lock()
 		prime := !c.hintsPrimed
 		c.hintsPrimed = true
 		c.mu.Unlock()
 
 		for key, value := range res.Keys {
-			if strings.HasPrefix(key, "_read_hints_") {
+			switch {
+			case strings.HasPrefix(key, HintsKeyPrefix):
 				c.ingestHints(key, value, prime)
+			case strings.HasPrefix(key, ClientStatusKeyPrefix):
+				c.ingestStatus(key, value, prime)
 			}
 		}
 
@@ -298,8 +347,11 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		if err := json.Unmarshal(frame, &reply); err != nil {
 			return nil
 		}
-		if strings.HasPrefix(reply.Key, "_read_hints_") {
+		switch {
+		case strings.HasPrefix(reply.Key, HintsKeyPrefix):
 			c.ingestHints(reply.Key, reply.Value, false)
+		case strings.HasPrefix(reply.Key, ClientStatusKeyPrefix):
+			c.ingestStatus(reply.Key, reply.Value, false)
 		}
 
 	case "PrintJSON":
@@ -319,6 +371,18 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		// from the cached storage instead.
 		if msg.Type == "Chat" {
 			c.handleHintCommand(msg.Slot, msg.Message)
+		}
+
+		// Releases and collects are announced and then forgotten: the server
+		// keeps no readable record, so this event is the only chance to count
+		// them.
+		if c.tracker != nil {
+			switch msg.Type {
+			case "Release":
+				c.tracker.Released(msg.Slot)
+			case "Collect":
+				c.tracker.Collected(msg.Slot)
+			}
 		}
 	}
 
@@ -381,10 +445,34 @@ func (c *Client) ingestSlotInfo(info map[string]NetworkSlot) {
 			continue
 		}
 		c.slotGames[n] = slot.Game
+		c.slotTypes[n] = slot.Type
 		if _, known := c.slotNames[n]; !known {
 			c.slotNames[n] = slot.Name
 		}
 	}
+}
+
+// ingestStatus records one slot's client status from data storage.
+//
+// The stored value is a bare integer rather than an object, since the server
+// writes client_game_state[team, slot] straight into the key.
+func (c *Client) ingestStatus(key string, raw json.RawMessage, prime bool) {
+	if c.tracker == nil || len(raw) == 0 || string(raw) == "null" {
+		return
+	}
+
+	slot, ok := SlotFromClientStatusKey(key)
+	if !ok {
+		return
+	}
+
+	var status int
+	if err := json.Unmarshal(raw, &status); err != nil {
+		c.log.Warn("unreadable client status", "key", key, "raw", string(raw), "error", err)
+		return
+	}
+
+	c.tracker.Status(slot, status, prime)
 }
 
 // send marshals a packet into the single-element array the protocol expects.

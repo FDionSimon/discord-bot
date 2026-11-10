@@ -10,6 +10,9 @@ import "strconv"
 // dark theme, which is what most people use.
 const (
 	ansiReset = "\u001b[0m"
+	// ansiBold is color-free emphasis, for headings inside an ansi fence
+	// where Discord markdown such as **bold** would show literally.
+	ansiBold = "\u001b[1m"
 )
 
 // playerPalette is ordered so that adjacent slots look clearly different.

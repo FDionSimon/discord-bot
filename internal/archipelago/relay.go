@@ -40,6 +40,8 @@ func DefaultKinds() map[string]bool {
 		"Release":  true,
 		"Collect":  true,
 		"Countdown": true,
+		// Playthrough is this bot's own start and finish banners.
+		"Playthrough": true,
 	}
 }
 
@@ -120,6 +122,10 @@ func format(ev Event) string {
 	text := sanitize(ev.Text)
 
 	switch ev.Kind {
+	case "Playthrough":
+		// Banners carry their own rule and heading over several lines, so a
+		// bullet prefix would only land on the first one.
+		return text
 	case "Goal":
 		return "🏆 " + text
 	case "Join":

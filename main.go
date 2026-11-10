@@ -67,6 +67,10 @@ func main() {
 			Password: cfg.APPassword,
 		}, log)
  
+		// The tracker posts the start and finish banners. It is attached
+		// before Run so the first handshake already reports the seed.
+		ap.Track(archipelago.NewPlaythrough(cfg.APStateFile, ap.Emit, log))
+
 		go ap.Run(workerCtx)
 		go archipelago.NewRelay(b.Session(), cfg.APChannelID, ap, log).Run(workerCtx)
  
