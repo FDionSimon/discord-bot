@@ -2,7 +2,6 @@ package archipelago
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -101,10 +100,6 @@ func (r *Relay) flush(batch []string) {
 
 	// The fence costs a few characters, so leave room for it.
 	for _, chunk := range chunk(batch, 1850) {
-		// TEMPORARY: %q makes escape codes visible in the log. Remove once
-		// the colors are confirmed working.
-		r.log.Info("chunk", "text", fmt.Sprintf("%q", chunk))
-
 		// Discord only honors ANSI escape codes inside a fence tagged "ansi".
 		// Outside one they show as literal garbage, so any message carrying
 		// colored names has to be wrapped whole.

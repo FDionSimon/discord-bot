@@ -239,18 +239,18 @@ func (c *Client) handleHintCommand(slot int, message string) {
 	hints := append([]Hint(nil), c.hintsBySlot[slot]...)
 	c.mu.RUnlock()
 
-	// Hints for our own slot reach us as ordinary PrintJSON messages, so
-	// answering the command here as well would post everything twice.
-	if slot == own {
-		return
-	}
-
 	if len(hints) == 0 {
 		return
 	}
 
 	matches := make([]Hint, 0, len(hints))
 	for _, h := range hints {
+		// A hint that concerns our own slot reaches us as an ordinary
+		// PrintJSON, whoever asked for it. Listing it here as well would post
+		// it twice.
+		if h.ReceivingPlayer == own || h.FindingPlayer == own {
+			continue
+		}
 		// An empty query is a bare !hint, which lists everything that slot has.
 		if query == "" || c.hintMatches(h, query) {
 			matches = append(matches, h)
