@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"fmt"
 
 	"github.com/bwmarrin/discordgo"
 )
