@@ -32,6 +32,47 @@ import (
 // clock. Game-side tags such as DeathLink are deliberately absent.
 var nonGameTags = []string{"TextOnly", "Tracker", "HintGame"}
 
+// hasNonGameTag reports whether a client's tags mark it as watching rather
+// than playing. Join carries these directly.
+func hasNonGameTag(tags []string) bool {
+	for _, tag := range tags {
+		for _, skip := range nonGameTags {
+			if strings.EqualFold(tag, skip) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// textHasNonGameTag is the same test for a Part, which carries no tags of its
+// own. The server prints the leaving client's tag list into the message, so
+// the rendered text is what there is to go on.
+func textHasNonGameTag(text string) bool {
+	for _, tag := range nonGameTags {
+		if strings.Contains(text, tag) {
+			return true
+		}
+	}
+	return false
+}
+
+// ToolingPresence reports whether a Join or Part came from a tracker, a text
+// client or this relay itself, rather than from someone playing.
+//
+// Those connect and disconnect like players and are announced identically, so
+// without this the feed reports the bot's own reconnects as the slot owner
+// joining the game.
+func ToolingPresence(kind string, tags []string, text string) bool {
+	switch kind {
+	case "Join":
+		return hasNonGameTag(tags)
+	case "Part":
+		return textHasNonGameTag(text)
+	}
+	return false
+}
+
 // SetOwnSlot records which slot this relay authenticates as, whose status
 // cannot be trusted as a presence signal.
 func (p *Playthrough) SetOwnSlot(slot int) {
@@ -43,12 +84,8 @@ func (p *Playthrough) SetOwnSlot(slot int) {
 
 // Joined starts a slot's clock when a real game client connects.
 func (p *Playthrough) Joined(slot int, tags []string) {
-	for _, tag := range tags {
-		for _, skip := range nonGameTags {
-			if strings.EqualFold(tag, skip) {
-				return
-			}
-		}
+	if hasNonGameTag(tags) {
+		return
 	}
 
 	p.mu.Lock()
@@ -63,10 +100,8 @@ func (p *Playthrough) Joined(slot int, tags []string) {
 // the server appends the leaving client's tag list to the message, which is
 // enough to tell a player quitting from a tracker closing.
 func (p *Playthrough) Parted(slot int, text string) {
-	for _, tag := range nonGameTags {
-		if strings.Contains(text, tag) {
-			return
-		}
+	if textHasNonGameTag(text) {
+		return
 	}
 
 	p.mu.Lock()

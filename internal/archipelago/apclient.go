@@ -364,7 +364,14 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 			return nil
 		}
 		text := c.render(msg.Data)
-		c.emit(Event{Kind: msg.Type, Text: text, At: time.Now()})
+
+		// Trackers, text clients and this relay itself join and leave exactly
+		// like players, and the server announces them the same way. Left in,
+		// every reconnect of this bot would read as the slot's owner joining
+		// the game. The clock below ignores them for the same reason.
+		if !ToolingPresence(msg.Type, msg.Tags, text) {
+			c.emit(Event{Kind: msg.Type, Text: text, At: time.Now()})
+		}
 
 		// Re-displaying an existing hint writes nothing to storage, so the
 		// server sends it only to the slots it concerns and this client never
