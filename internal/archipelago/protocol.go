@@ -123,6 +123,10 @@ type PrintJSON struct {
 	// Message is the raw text of a Chat packet, before rendering. It is how
 	// a client command such as "!hint Lamp" can be recognized.
 	Message string `json:"message"`
+	// Tags are the connecting client's tags on a Join packet, which is how a
+	// game client is told apart from a tracker or text client. Part carries no
+	// tags, only the slot.
+	Tags []string `json:"tags"`
 }
 
 // GameData holds one game's ID tables. The server sends name-to-ID; this

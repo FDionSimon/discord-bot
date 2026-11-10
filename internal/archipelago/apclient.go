@@ -296,6 +296,10 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		c.log.Info("archipelago authenticated", "slot", c.cfg.Slot, "players", len(con.Players))
 
 		if c.tracker != nil {
+			// The relay's own slot is announced before the roster, because its
+			// client status cannot be trusted as a presence signal: this
+			// connection keeps the slot occupied.
+			c.tracker.SetOwnSlot(con.Slot)
 			c.tracker.SetRoster(c.Participants())
 			c.tracker.Begin(c.SeedName())
 		}
@@ -359,11 +363,8 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		if err := json.Unmarshal(frame, &msg); err != nil {
 			return nil
 		}
-		c.emit(Event{
-			Kind: msg.Type,
-			Text: c.render(msg.Data),
-			At:   time.Now(),
-		})
+		text := c.render(msg.Data)
+		c.emit(Event{Kind: msg.Type, Text: text, At: time.Now()})
 
 		// Re-displaying an existing hint writes nothing to storage, so the
 		// server sends it only to the slots it concerns and this client never
@@ -373,15 +374,21 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 			c.handleHintCommand(msg.Slot, msg.Message)
 		}
 
-		// Releases and collects are announced and then forgotten: the server
-		// keeps no readable record, so this event is the only chance to count
-		// them.
+		// Releases, collects, joins and parts are announced and then
+		// forgotten: the server keeps no readable record of any of them, so
+		// these events are the only chance to count them.
 		if c.tracker != nil {
 			switch msg.Type {
 			case "Release":
 				c.tracker.Released(msg.Slot)
 			case "Collect":
 				c.tracker.Collected(msg.Slot)
+			case "Join":
+				c.tracker.Joined(msg.Slot, msg.Tags)
+			case "Part":
+				// Part carries no tags, so the rendered text is passed along:
+				// the server prints the leaving client's tags into it.
+				c.tracker.Parted(msg.Slot, text)
 			}
 		}
 	}
