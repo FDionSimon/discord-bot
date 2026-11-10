@@ -309,7 +309,7 @@ func (c *Client) handle(conn *websocket.Conn, frame json.RawMessage) error {
 		}
 		c.emit(Event{
 			Kind: msg.Type,
-			Text: c.render(msg.Data),
+			Text: c.render(msg.Data, msg.Type == "Hint"),
 			At:   time.Now(),
 		})
 

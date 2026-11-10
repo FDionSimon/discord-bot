@@ -185,8 +185,8 @@ func (c *Client) renderHint(h Hint) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	receiver := c.playerName(strconv.Itoa(h.ReceivingPlayer))
-	finder := c.playerName(strconv.Itoa(h.FindingPlayer))
+	receiver := colorize(h.ReceivingPlayer, c.playerName(strconv.Itoa(h.ReceivingPlayer)))
+	finder := colorize(h.FindingPlayer, c.playerName(strconv.Itoa(h.FindingPlayer)))
 	item := c.lookupName(c.itemNames, h.ReceivingPlayer, strconv.FormatInt(h.Item, 10), "item")
 	location := c.lookupName(c.locationNames, h.FindingPlayer, strconv.FormatInt(h.Location, 10), "location")
 

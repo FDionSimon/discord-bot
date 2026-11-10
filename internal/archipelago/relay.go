@@ -98,7 +98,14 @@ func (r *Relay) flush(batch []string) {
 		return
 	}
 
-	for _, chunk := range chunk(batch, 1900) {
+	// The fence costs a few characters, so leave room for it.
+	for _, chunk := range chunk(batch, 1850) {
+		// Discord only honors ANSI escape codes inside a fence tagged "ansi".
+		// Outside one they show as literal garbage, so any message carrying
+		// colored names has to be wrapped whole.
+		if strings.Contains(chunk, "\u001b[") {
+			chunk = "```ansi\n" + chunk + "\n```"
+		}
 		if _, err := r.session.ChannelMessageSend(r.channelID, chunk); err != nil {
 			// A failed post is logged and dropped. Retrying risks duplicating
 			// messages that did land, and the feed is informational.
@@ -138,6 +145,8 @@ func format(ev Event) string {
 func sanitize(s string) string {
 	s = strings.ReplaceAll(s, "@everyone", "@​everyone")
 	s = strings.ReplaceAll(s, "@here", "@​here")
+	// Breaking out of an ansi fence would expose raw escape codes, so a
+	// fence in player-supplied text is defanged here.
 	s = strings.ReplaceAll(s, "```", "'''")
 	return s
 }
