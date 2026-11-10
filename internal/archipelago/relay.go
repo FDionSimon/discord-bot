@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"strings"
 	"time"
-	"fmt"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -101,7 +100,6 @@ func (r *Relay) flush(batch []string) {
 
 	// The fence costs a few characters, so leave room for it.
 	for _, chunk := range chunk(batch, 1850) {
-		r.log.Info("chunk", "text", fmt.Sprintf("%q", chunk))   // temporary
 		// Discord only honors ANSI escape codes inside a fence tagged "ansi".
 		// Outside one they show as literal garbage, so any message carrying
 		// colored names has to be wrapped whole.
