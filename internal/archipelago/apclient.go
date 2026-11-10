@@ -151,7 +151,13 @@ func (c *Client) session(ctx context.Context) error {
 	// in the clear over ws, and public hosts terminate TLS on the room port.
 	endpoint := fmt.Sprintf("wss://%s", c.cfg.Address)
 
-	dialer := websocket.Dialer{HandshakeTimeout: 15 * time.Second}
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 15 * time.Second,
+		// Archipelago warns clients that do not negotiate permessage-deflate
+		// and says it may become required. gorilla offers it as
+		// no-context-takeover only, which the server accepts.
+		EnableCompression: true,
+	}
 	conn, _, err := dialer.DialContext(ctx, endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("dial %s: %w", endpoint, err)
