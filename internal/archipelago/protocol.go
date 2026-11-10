@@ -25,10 +25,13 @@ type Version struct {
 	Class string `json:"class"`
 }
 
-// SupportedVersion is what this client reports during the handshake. The
-// server refuses connections from clients older than the multiworld requires,
-// so raise this if a newer server rejects us.
-var SupportedVersion = Version{Major: 0, Minor: 5, Build: 0, Class: "Version"}
+// SupportedVersion is what this client reports during the handshake, and what
+// other players see in the join message as Client(x.y.z).
+//
+// The server refuses connections from clients older than the multiworld
+// requires, so raise this when a newer server rejects us. Keep it at or below
+// the version of the server being connected to.
+var SupportedVersion = Version{Major: 0, Minor: 6, Build: 8, Class: "Version"}
 
 // envelope peeks at the command name before full decoding.
 type envelope struct {
