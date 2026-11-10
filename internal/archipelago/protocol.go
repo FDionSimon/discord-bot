@@ -224,3 +224,30 @@ func SlotFromHintsKey(key string) (int, bool) {
 	slot, err := strconv.Atoi(parts[1])
 	return slot, err == nil
 }
+
+// HintStatus values, from NetUtils.HintStatus.
+const (
+	HintUnspecified = 0
+	HintNoPriority  = 10
+	HintAvoid       = 20
+	HintPriority    = 30
+	HintFound       = 40
+)
+
+// hintStatusNames mirrors NetUtils.status_names, so a hint rendered from
+// storage reads exactly like one the server sent.
+var hintStatusNames = map[int]string{
+	HintFound:       "(found)",
+	HintUnspecified: "(unspecified)",
+	HintNoPriority:  "(no priority)",
+	HintAvoid:       "(avoid)",
+	HintPriority:    "(priority)",
+}
+
+// HintStatusName renders a hint status the way the server does.
+func HintStatusName(status int) string {
+	if name, ok := hintStatusNames[status]; ok {
+		return name
+	}
+	return "(unknown)"
+}

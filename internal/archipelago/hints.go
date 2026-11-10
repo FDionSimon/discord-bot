@@ -171,7 +171,12 @@ func (c *Client) ingestHints(key string, raw json.RawMessage, prime bool) {
 	}
 }
 
-// renderHint turns a stored hint into a sentence.
+// renderHint renders a stored hint exactly as the server would.
+//
+// This mirrors Hint.as_network_message in NetUtils.py, so a hint reconstructed
+// from storage is indistinguishable from one the server pushed as PrintJSON:
+//
+//	[Hint]: {receiver}'s {item} is at {location} in {finder}'s World. (found)
 //
 // Note which game owns which ID: the item belongs to the receiving player's
 // game, the location to the finding player's. Using the wrong one yields a
@@ -185,18 +190,32 @@ func (c *Client) renderHint(h Hint) string {
 	item := c.lookupName(c.itemNames, h.ReceivingPlayer, strconv.FormatInt(h.Item, 10), "item")
 	location := c.lookupName(c.locationNames, h.FindingPlayer, strconv.FormatInt(h.Location, 10), "location")
 
-	msg := fmt.Sprintf("%s's **%s** is at %s", receiver, item, location)
-	if h.FindingPlayer != h.ReceivingPlayer {
-		msg += fmt.Sprintf(" in %s's world", finder)
-	}
+	var b strings.Builder
+	b.WriteString("[Hint]: ")
+	b.WriteString(receiver)
+	b.WriteString("'s ")
+	b.WriteString(item)
+	b.WriteString(" is at ")
+	b.WriteString(location)
+	b.WriteString(" in ")
+	b.WriteString(finder)
 	if h.Entrance != "" {
-		msg += fmt.Sprintf(" (entrance: %s)", h.Entrance)
+		b.WriteString("'s World at ")
+		b.WriteString(h.Entrance)
+	} else {
+		b.WriteString("'s World")
 	}
-	if h.Found {
-		msg += " — found"
-	}
+	b.WriteString(". ")
 
-	return msg
+	// The server derives the trailing status from Hint.status, falling back to
+	// found when a server predates the status field.
+	status := h.Status
+	if status == HintUnspecified && h.Found {
+		status = HintFound
+	}
+	b.WriteString(HintStatusName(status))
+
+	return b.String()
 }
 
 // handleHintCommand answers a !hint seen in chat from cached storage.
@@ -218,7 +237,6 @@ func (c *Client) handleHintCommand(slot int, message string) {
 	c.mu.RLock()
 	own := c.ownSlot
 	hints := append([]Hint(nil), c.hintsBySlot[slot]...)
-	asker := c.playerName(strconv.Itoa(slot))
 	c.mu.RUnlock()
 
 	// Hints for our own slot reach us as ordinary PrintJSON messages, so
@@ -244,31 +262,19 @@ func (c *Client) handleHintCommand(slot int, message string) {
 
 	// Outstanding hints first. They are the actionable ones, and on a slot
 	// with a long history the found ones would otherwise fill the whole list
-	// and push everything useful into the truncation notice.
+	// and push the useful ones below the fold in a long list.
 	// SliceStable keeps the server's ordering within each group.
 	sort.SliceStable(matches, func(i, j int) bool {
 		return !matches[i].Found && matches[j].Found
 	})
 
-	outstanding := 0
+	// One event per hint, with no header of its own. Each then goes through
+	// exactly the same formatting as a hint the server pushed, so the two
+	// sources are indistinguishable in the channel. The preceding chat line
+	// already shows who asked.
 	for _, h := range matches {
-		if !h.Found {
-			outstanding++
-		}
+		c.emit(Event{Kind: "Hint", Text: c.renderHint(h), At: time.Now()})
 	}
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s looked up a hint", asker)
-	if outstanding > 0 {
-		fmt.Fprintf(&b, " (%d outstanding)", outstanding)
-	}
-	b.WriteString(":")
-
-	for _, h := range matches {
-		b.WriteString("\n• ")
-		b.WriteString(c.renderHint(h))
-	}
-	c.emit(Event{Kind: "Hint", Text: b.String(), At: time.Now()})
 }
 
 // hintMatches reports whether a hint's item or location name contains query.
